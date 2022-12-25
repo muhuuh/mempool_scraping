@@ -15,7 +15,7 @@ export async function listenMemepool() {
     process.env.ALCHEMY_API_KEY
   );
 
-  const txFound = [];
+  const weth_address = contractAddress.WETH_Goerli;
   const rooter = contractAddress.SwapRouterV2; //current pool we track
   const filter1 = rooter;
   //const functionEvent = "createOrder(bool,uint160,uint256)";
@@ -64,9 +64,13 @@ export async function listenMemepool() {
           finalAddresses.push(currentAddress);
         }
 
+        let tradedTokenAddress = finalAddresses.filter(
+          (address) => address != from.toLowerCase()
+        );
         let logData = {
           decodedData: txData.data,
           finalAddresses: finalAddresses,
+          tradedTokenAddress: tradedTokenAddress,
           gasPrice: gasPrice,
           gasLimit: gasLimit,
           from: from,
@@ -74,7 +78,7 @@ export async function listenMemepool() {
           value: value,
         };
         saveSwapOrder(logData);
-        logTxData(decoded, finalAddresses, gasPrice, gasLimit, from, value);
+        logTxData(logData);
 
         //call settleFuntion
         return;
@@ -106,20 +110,14 @@ async function saveSwapOrder(logData) {
   );
 }
 
-async function logTxData(
-  data,
-  finalAddresses,
-  gasPrice,
-  gasLimit,
-  from,
-  value
-) {
-  console.log(`data: ${data}`);
-  console.log(`dataAddresses: ${finalAddresses}`);
-  console.log(`gasPrice: ${gasPrice}`);
-  console.log(`gasLimit: ${gasLimit}`);
-  console.log(`from: ${from}`);
-  console.log(`value: ${value}`);
+async function logTxData(logData) {
+  console.log(`data: ${logData.decodedData}`);
+  console.log(`dataAddresses: ${logData.finalAddresses}`);
+  console.log(`tradedTokenAddress: ${logData.tradedTokenAddress}`);
+  console.log(`gasPrice: ${logData.gasPrice}`);
+  console.log(`gasLimit: ${logData.gasLimit}`);
+  console.log(`from: ${logData.from}`);
+  console.log(`value: ${logData.value}`);
   console.log(
     "-------------------------------------------------------------------"
   );
