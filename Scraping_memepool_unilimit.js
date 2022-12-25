@@ -3,6 +3,7 @@ import { ethers } from "ethers";
 import abiSwapRouterV2 from "./constants/abiSwapRouterV2.json" assert { type: "json" };
 import abiFlashBotTest from "./constants/abiFlashBotTest.json" assert { type: "json" };
 import contractAddress from "./constants/contractAddress.json" assert { type: "json" };
+import fs from "fs";
 import { config } from "dotenv";
 config();
 
@@ -15,8 +16,8 @@ export async function listenMemepool() {
   );
 
   const txFound = [];
-  const currentPool = contractAddress.SwapRouterV2; //current pool we track
-  const filter1 = currentPool;
+  const rooter = contractAddress.SwapRouterV2; //current pool we track
+  const filter1 = rooter;
   //const functionEvent = "createOrder(bool,uint160,uint256)";
   //const functionEvent = "swap(address,address,int256,int256,uint160,uint128,int24)";
   const functionEvent = "multicall(uint256,bytes[])";
@@ -42,16 +43,39 @@ export async function listenMemepool() {
           functionEvent,
           txData.data
         );
+        const stringDecoded = String(decoded);
+        const decodedAddresses = stringDecoded
+          .split("00")
+          .filter((str) => str.length > 24);
+
+        let finalAddresses = [];
+        for (let i in decodedAddresses) {
+          let currentAddress = decodedAddresses[i];
+          if (currentAddress.length < 40) {
+            while (currentAddress.length < 40) {
+              currentAddress = "0" + currentAddress;
+            }
+          } else if (currentAddress.length > 40) {
+            while (currentAddress.length > 40) {
+              currentAddress = currentAddress.substr(1);
+            }
+          }
+          currentAddress = "0x" + currentAddress;
+          finalAddresses.push(currentAddress);
+        }
+
         let logData = {
           decodedData: txData.data,
+          finalAddresses: finalAddresses,
           gasPrice: gasPrice,
           gasLimit: gasLimit,
           from: from,
           to: to,
           value: value,
         };
-        txFound.push(logData);
-        logTxData(decoded, gasPrice, gasLimit, from, value);
+        saveSwapOrder(logData);
+        logTxData(decoded, finalAddresses, gasPrice, gasLimit, from, value);
+
         //call settleFuntion
         return;
       }
@@ -59,8 +83,39 @@ export async function listenMemepool() {
   });
 }
 
-async function logTxData(data, gasPrice, gasLimit, from, value) {
+async function saveSwapOrder(logData) {
+  fs.readFile(
+    "trackMempoolOrders.json",
+    "utf-8",
+    async function readFileCallback(err, data) {
+      if (err) {
+        console.log(err);
+      } else {
+        let obj = JSON.parse(data);
+        obj.mempoolOrders.push(logData);
+        let json = JSON.stringify(obj);
+        fs.writeFile("trackMempoolOrders.json", json, "utf8", (err) => {
+          if (err) {
+            console.log(err);
+          } else {
+            console.log("written success");
+          }
+        });
+      }
+    }
+  );
+}
+
+async function logTxData(
+  data,
+  finalAddresses,
+  gasPrice,
+  gasLimit,
+  from,
+  value
+) {
   console.log(`data: ${data}`);
+  console.log(`dataAddresses: ${finalAddresses}`);
   console.log(`gasPrice: ${gasPrice}`);
   console.log(`gasLimit: ${gasLimit}`);
   console.log(`from: ${from}`);
@@ -70,7 +125,23 @@ async function logTxData(data, gasPrice, gasLimit, from, value) {
   );
 }
 
+/*
+export async function main() {
+  try {
+    listenMemepool();
+  } catch (err) {
+    console.error(err);
+    setTimeout(() => {
+      listenMemepool();
+    }, 1000);
+  }
+}
+*/
+
 listenMemepool().catch((err) => {
   console.error(err);
-  process.exitCode = 1;
+  //process.exitCode = 1;
+  setTimeout(() => {
+    listenMemepool();
+  }, 1000);
 });
